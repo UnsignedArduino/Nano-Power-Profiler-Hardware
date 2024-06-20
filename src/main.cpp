@@ -13,6 +13,7 @@ float currPower = 0;
 uint32_t measureStartTime = 0;
 uint32_t measureEndTime = 0;
 uint64_t measureSamples = 0;
+uint32_t lastSampleTime = 0;
 
 float minVoltage = 0;
 float maxVoltage = 0;
@@ -41,7 +42,7 @@ void initiateMeasure() {
   }
   state = ACTIVE;
   measureStartTime = millis();
-  measureEndTime = UINT32_MAX;
+  measureEndTime = measureStartTime;
   measureSamples = 1;
   minVoltage = currVoltage;
   maxVoltage = currVoltage;
@@ -59,9 +60,6 @@ void printMeasureStats() {
   Serial.print("samples: ");
   printUint64(measureSamples);
   Serial.print("   time: ");
-  if (state == ACTIVE) {
-    measureEndTime = millis();
-  }
   const uint32_t measureTime = measureEndTime - measureStartTime;
   Serial.print(measureTime);
   Serial.print(" ms   ");
@@ -84,7 +82,9 @@ void sample() {
   currVoltage = ina260.readBusVoltage();
   currCurrent = ina260.readCurrent();
   currPower = ina260.readPower();
+  lastSampleTime = millis();
   if (state == ACTIVE) {
+    measureEndTime = millis();
     measureSamples++;
 
     if (currVoltage > maxVoltage) {
@@ -137,7 +137,7 @@ void printVolts() {
     Serial.print(" mV   max: ");
     Serial.print(maxVoltage, 0);
     Serial.print(" mV   avg: ");
-    Serial.print(voltageSum / measureSamples, 0);
+    Serial.print(voltageSum / (float)measureSamples, 0);
   }
   Serial.println(" mV");
 }
@@ -151,9 +151,18 @@ void printCurrent() {
     Serial.print(" mA   max: ");
     Serial.print(maxCurrent, 0);
     Serial.print(" mA   avg: ");
-    Serial.print(currentSum / measureSamples, 0);
+    const float average = currentSum / (float)measureSamples;
+    Serial.print(average, 0);
+    Serial.print(" mA   total: ");
+    const uint32_t measureTime = measureEndTime - measureStartTime;
+    const float milliAmpMilliSeconds = average * (float)measureTime;
+    Serial.print(milliAmpMilliSeconds / 3600000);
+    Serial.print(" mAh   rate: ");
+    Serial.print(milliAmpMilliSeconds / (float)measureTime);
+    Serial.println(" mA/h");
+  } else {
+    Serial.println(" mA");
   }
-  Serial.println(" mA");
 }
 
 void printPower() {
@@ -165,9 +174,18 @@ void printPower() {
     Serial.print(" mW   max: ");
     Serial.print(maxPower, 0);
     Serial.print(" mW   avg: ");
-    Serial.print(powerSum / measureSamples, 0);
+    const float average = powerSum / (float)measureSamples;
+    Serial.print(average, 0);
+    const uint32_t measureTime = measureEndTime - measureStartTime;
+    const float milliWattMilliSeconds = average * (float)measureTime;
+    Serial.print(" mW   total: ");
+    Serial.print(milliWattMilliSeconds / 3600000);
+    Serial.print(" mWh   rate: ");
+    Serial.print(milliWattMilliSeconds / (float)measureTime);
+    Serial.println(" mW/h");
+  } else {
+    Serial.println(" mW");
   }
-  Serial.println(" mW");
 }
 
 void setup() {
