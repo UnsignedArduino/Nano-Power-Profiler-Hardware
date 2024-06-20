@@ -6,12 +6,25 @@ Adafruit_INA260 ina260 = Adafruit_INA260();
 enum State { ERROR = -1, READY = 0, ACTIVE = 1 };
 enum State state = READY;
 
-const size_t MAX_COMMAND_BUF = 2;
-char commandBuf[MAX_COMMAND_BUF];
-
 float currVoltage = 0;
 float currCurrent = 0;
 float currPower = 0;
+
+uint32_t measureStartTime = 0;
+uint32_t measureEndTime = 0;
+uint64_t measureSamples = 0;
+
+float minVoltage = 0;
+float maxVoltage = 0;
+float voltageSum = 0;
+
+float minCurrent = 0;
+float maxCurrent = 0;
+float currentSum = 0;
+
+float minPower = 0;
+float maxPower = 0;
+float powerSum = 0;
 
 void printUint64(uint64_t value) {
   if (value >= 10) {
@@ -21,13 +34,87 @@ void printUint64(uint64_t value) {
   Serial.print((byte)value % 10);
 }
 
+void initiateMeasure() {
+  if (state == ACTIVE) {
+    Serial.println("error: already measuring");
+    return;
+  }
+  state = ACTIVE;
+  measureStartTime = millis();
+  measureEndTime = UINT32_MAX;
+  measureSamples = 1;
+  minVoltage = currVoltage;
+  maxVoltage = currVoltage;
+  voltageSum = currVoltage;
+  minCurrent = currCurrent;
+  maxCurrent = currCurrent;
+  currentSum = currCurrent;
+  minPower = currPower;
+  maxPower = currPower;
+  powerSum = currPower;
+  Serial.println("initiate measure");
+}
+
+void printMeasureStats() {
+  Serial.print("samples: ");
+  printUint64(measureSamples);
+  Serial.print("   time: ");
+  if (state == ACTIVE) {
+    measureEndTime = millis();
+  }
+  const uint32_t measureTime = measureEndTime - measureStartTime;
+  Serial.print(measureTime);
+  Serial.print(" ms   ");
+  Serial.print((float)measureSamples / ((float)measureTime / 1000));
+  Serial.println(" hz");
+}
+
+void terminateMeasure() {
+  if (state != ACTIVE) {
+    Serial.println("error: must be measuring");
+    return;
+  }
+  state = READY;
+  measureEndTime = millis();
+  Serial.println("terminate measure");
+  printMeasureStats();
+}
+
 void sample() {
   currVoltage = ina260.readBusVoltage();
   currCurrent = ina260.readCurrent();
   currPower = ina260.readPower();
+  if (state == ACTIVE) {
+    measureSamples++;
+
+    if (currVoltage > maxVoltage) {
+      maxVoltage = currVoltage;
+    }
+    if (currVoltage < minVoltage) {
+      minVoltage = currVoltage;
+    }
+    voltageSum += currVoltage;
+
+    if (currCurrent > maxCurrent) {
+      maxCurrent = currCurrent;
+    }
+    if (currCurrent < minCurrent) {
+      minCurrent = currCurrent;
+    }
+    currentSum += currCurrent;
+
+    if (currPower > maxPower) {
+      maxPower = currPower;
+    }
+    if (currPower < minPower) {
+      minPower = currPower;
+    }
+    powerSum += currPower;
+  }
 }
 
 void printState() {
+  Serial.print("state: ");
   switch (state) {
     case ERROR:
       Serial.println("error");
@@ -42,17 +129,44 @@ void printState() {
 }
 
 void printVolts() {
-  Serial.print(currVoltage);
+  Serial.print("volts: ");
+  Serial.print(currVoltage, 0);
+  if (state == ACTIVE) {
+    Serial.print(" mV   min: ");
+    Serial.print(minVoltage, 0);
+    Serial.print(" mV   max: ");
+    Serial.print(maxVoltage, 0);
+    Serial.print(" mV   avg: ");
+    Serial.print(voltageSum / measureSamples, 0);
+  }
   Serial.println(" mV");
 }
 
 void printCurrent() {
-  Serial.print(currCurrent);
+  Serial.print("current: ");
+  Serial.print(currCurrent, 0);
+  if (state == ACTIVE) {
+    Serial.print(" mA   min: ");
+    Serial.print(minCurrent, 0);
+    Serial.print(" mA   max: ");
+    Serial.print(maxCurrent, 0);
+    Serial.print(" mA   avg: ");
+    Serial.print(currentSum / measureSamples, 0);
+  }
   Serial.println(" mA");
 }
 
 void printPower() {
-  Serial.print(currPower);
+  Serial.print("power: ");
+  Serial.print(currPower, 0);
+  if (state == ACTIVE) {
+    Serial.print(" mW   min: ");
+    Serial.print(minPower, 0);
+    Serial.print(" mW   max: ");
+    Serial.print(maxPower, 0);
+    Serial.print(" mW   avg: ");
+    Serial.print(powerSum / measureSamples, 0);
+  }
   Serial.println(" mW");
 }
 
@@ -71,13 +185,12 @@ void loop() {
     sample();
   }
 
+  char command = '\0';
+
   if (Serial.available()) {
-    size_t commandLen =
-      Serial.readBytesUntil('\n', commandBuf, MAX_COMMAND_BUF);
-    commandBuf[commandLen] = '\0';
+    command = toLowerCase(Serial.read());
   }
 
-  const char command = toLowerCase(commandBuf[0]);
   if (command != '\0') {
     if (command == 's') {
       printState();
@@ -92,12 +205,12 @@ void loop() {
       printCurrent();
       printPower();
     } else if (command == 'i') {
-      state = ACTIVE;
+      initiateMeasure();
     } else if (command == 't') {
-      state = READY;
+      terminateMeasure();
+    } else if (command == 'h') {
+      printMeasureStats();
     }
-    Serial.println("ok");
-    memset(commandBuf, 0, MAX_COMMAND_BUF);
   }
 
   static int16_t blinkPeriod = 0;
