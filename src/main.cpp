@@ -155,10 +155,11 @@ void printCurrent() {
     Serial.print(average, 0);
     Serial.print(" mA   total: ");
     const uint32_t measureTime = measureEndTime - measureStartTime;
-    const float milliAmpMilliSeconds = average * (float)measureTime;
-    Serial.print(milliAmpMilliSeconds / 3600000);
+    const float mAh = average * (float)measureTime / 3600000;
+    Serial.print(mAh, 3);
     Serial.print(" mAh   rate: ");
-    Serial.print(milliAmpMilliSeconds / (float)measureTime);
+    Serial.print(average, 3); // average * (measureTime / 3600000) /
+                              // (measureTime / 3600000) = average
     Serial.println(" mA/h");
   } else {
     Serial.println(" mA");
@@ -176,12 +177,13 @@ void printPower() {
     Serial.print(" mW   avg: ");
     const float average = powerSum / (float)measureSamples;
     Serial.print(average, 0);
-    const uint32_t measureTime = measureEndTime - measureStartTime;
-    const float milliWattMilliSeconds = average * (float)measureTime;
     Serial.print(" mW   total: ");
-    Serial.print(milliWattMilliSeconds / 3600000);
+    const uint32_t measureTime = measureEndTime - measureStartTime;
+    const float mWh = average * (float)measureTime / 3600000;
+    Serial.print(mWh, 3);
     Serial.print(" mWh   rate: ");
-    Serial.print(milliWattMilliSeconds / (float)measureTime);
+    Serial.print(average, 3); // average * (measureTime / 3600000) /
+                              // (measureTime / 3600000) = average
     Serial.println(" mW/h");
   } else {
     Serial.println(" mW");
