@@ -9,6 +9,53 @@ enum State state = READY;
 const size_t MAX_COMMAND_BUF = 2;
 char commandBuf[MAX_COMMAND_BUF];
 
+float currVoltage = 0;
+float currCurrent = 0;
+float currPower = 0;
+
+void printUint64(uint64_t value) {
+  if (value >= 10) {
+    printUint64(value / 10);
+  }
+
+  Serial.print((byte)value % 10);
+}
+
+void sample() {
+  currVoltage = ina260.readBusVoltage();
+  currCurrent = ina260.readCurrent();
+  currPower = ina260.readPower();
+}
+
+void printState() {
+  switch (state) {
+    case ERROR:
+      Serial.println("error");
+      break;
+    case READY:
+      Serial.println("ready");
+      break;
+    case ACTIVE:
+      Serial.println("active");
+      break;
+  }
+}
+
+void printVolts() {
+  Serial.print(currVoltage);
+  Serial.println(" mV");
+}
+
+void printCurrent() {
+  Serial.print(currCurrent);
+  Serial.println(" mA");
+}
+
+void printPower() {
+  Serial.print(currPower);
+  Serial.println(" mW");
+}
+
 void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
@@ -20,35 +67,37 @@ void setup() {
 }
 
 void loop() {
+  if (state != ERROR) {
+    sample();
+  }
+
   if (Serial.available()) {
     size_t commandLen =
       Serial.readBytesUntil('\n', commandBuf, MAX_COMMAND_BUF);
     commandBuf[commandLen] = '\0';
+  }
 
-    const char command = toLowerCase(commandBuf[0]);
-
+  const char command = toLowerCase(commandBuf[0]);
+  if (command != '\0') {
     if (command == 's') {
-      switch (state) {
-        case ERROR:
-          Serial.println("error");
-          break;
-        case READY:
-          Serial.println("ready");
-          break;
-        case ACTIVE:
-          Serial.println("active");
-          break;
-      }
-    } else if (command == 'c') {
-      Serial.print(ina260.readCurrent());
-      Serial.println(" mA");
+      printState();
     } else if (command == 'v') {
-      Serial.print(ina260.readBusVoltage());
-      Serial.println(" mV");
+      printVolts();
+    } else if (command == 'c') {
+      printCurrent();
     } else if (command == 'p') {
-      Serial.print(ina260.readPower());
-      Serial.println(" mW");
+      printPower();
+    } else if (command == 'a') {
+      printVolts();
+      printCurrent();
+      printPower();
+    } else if (command == 'i') {
+      state = ACTIVE;
+    } else if (command == 't') {
+      state = READY;
     }
+    Serial.println("ok");
+    memset(commandBuf, 0, MAX_COMMAND_BUF);
   }
 
   static int16_t blinkPeriod = 0;
